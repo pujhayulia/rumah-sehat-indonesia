@@ -1,36 +1,43 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Rumah Sehat Indonesia — Sistem Resepsionis Klinik
 
-## Getting Started
+Aplikasi web (PWA-ready) untuk menggantikan pencatatan manual laporan harian
+Klinik RSI Ciledug: kunjungan pasien, kas harian, dan komisi terapis.
 
-First, run the development server:
+Fase 1 (modul yang sudah ada): Kunjungan, Kas, Laporan, Master Terapis & Layanan.
+Fase 2 (rencana lanjutan): RSI Mart (POS produk), keanggotaan/member, rekam medis.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Setup
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+1. Buat project baru di [supabase.com](https://supabase.com).
+2. Buka **SQL Editor** di dashboard Supabase, jalankan isi file [`supabase/schema.sql`](./supabase/schema.sql).
+   Ini akan membuat semua tabel, trigger auto-pencatatan kas, view rekap, RLS, dan seed data
+   layanan (Totok/Bekam/Itera/Biolite) + terapis yang sudah berjalan.
+3. Buat user login pertama lewat **Authentication > Users > Add user** di Supabase
+   (email + password untuk resepsionis/owner), lalu tambahkan barisnya di tabel `profiles`.
+4. Salin `.env.local.example` menjadi `.env.local`, isi dengan **Project URL** dan **anon public key**
+   dari Supabase (Settings > API).
+5. Jalankan:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+   ```bash
+   npm install
+   npm run dev
+   ```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+   Buka [http://localhost:3000](http://localhost:3000).
 
-## Learn More
+## Struktur Data
 
-To learn more about Next.js, take a look at the following resources:
+Lihat [`supabase/schema.sql`](./supabase/schema.sql) untuk skema lengkap. Ringkasnya:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `therapists`, `services` — master terapis & jenis layanan (harga + komisi).
+- `patients`, `visits` — kunjungan harian pasien (pengganti baris di kertas laporan).
+- `cash_transactions` — buku kas satu pintu; baris pemasukan layanan & komisi terapis
+  otomatis dibuat oleh trigger saat ada kunjungan baru, baris lain (uang makan, operasional)
+  diinput manual dari halaman **Kas**.
+- `daily_summary` — view rekap harian (jumlah pasien, Qris, cash, pengeluaran, saldo),
+  dipakai di halaman **Dashboard** dan **Laporan**.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deploy
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Direkomendasikan deploy ke [Vercel](https://vercel.com/new) — tinggal hubungkan repo,
+isi env var `NEXT_PUBLIC_SUPABASE_URL` & `NEXT_PUBLIC_SUPABASE_ANON_KEY` yang sama.
