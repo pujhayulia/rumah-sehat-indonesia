@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { Branch, Service, Therapist } from "@/types/database";
+import type { Branch, Service, ServicePrice, Therapist } from "@/types/database";
 import { createVisits } from "./actions";
 
 interface LineItem {
@@ -23,6 +23,7 @@ export function VisitForm({
   defaultBranchId,
   therapists,
   services,
+  prices,
   initialPatientName,
   initialServiceId,
   bookingId,
@@ -32,6 +33,7 @@ export function VisitForm({
   defaultBranchId: string | null;
   therapists: Therapist[];
   services: Service[];
+  prices: ServicePrice[];
   initialPatientName?: string;
   initialServiceId?: string;
   bookingId?: string;
@@ -47,6 +49,16 @@ export function VisitForm({
     [therapists, branchId]
   );
 
+  // Harga & fee mengikuti cabang; layanan tanpa harga di cabang ini tidak ditampilkan.
+  const priceByKey = useMemo(
+    () => new Map(prices.map((p) => [`${p.branch_id}:${p.service_id}`, p])),
+    [prices]
+  );
+  const servicesIn = (bId: string) => services.filter((s) => priceByKey.has(`${bId}:${s.id}`));
+  const servicesInBranch = servicesIn(branchId);
+  const priceOf = (serviceId: string) => priceByKey.get(`${branchId}:${serviceId}`);
+
+  const [isSpecial, setIsSpecial] = useState(false);
   const [patientName, setPatientName] = useState(initialPatientName ?? "");
   const [age, setAge] = useState("");
   const [complaint, setComplaint] = useState("");
@@ -58,13 +70,24 @@ export function VisitForm({
   }
 
   const [lines, setLines] = useState<LineItem[]>(() => [
-    makeLine("line-0", therapistsInBranch[0]?.id ?? "", initialServiceId || services[0]?.id || ""),
+    makeLine(
+      "line-0",
+      therapistsInBranch[0]?.id ?? "",
+      servicesInBranch.some((s) => s.id === initialServiceId) ? initialServiceId! : servicesInBranch[0]?.id ?? ""
+    ),
   ]);
 
   function handleBranchChange(value: string) {
     setBranchId(value);
     const firstTherapist = therapists.find((t) => t.branch_id === value);
-    setLines((prev) => prev.map((line) => ({ ...line, therapistId: firstTherapist?.id ?? "" })));
+    const available = servicesIn(value);
+    setLines((prev) =>
+      prev.map((line) => ({
+        ...line,
+        therapistId: firstTherapist?.id ?? "",
+        serviceId: available.some((s) => s.id === line.serviceId) ? line.serviceId : available[0]?.id ?? "",
+      }))
+    );
   }
 
   function updateLine(key: string, patch: Partial<LineItem>) {
@@ -72,23 +95,29 @@ export function VisitForm({
   }
 
   function addLine() {
-    setLines((prev) => [...prev, makeLine(nextKey(), therapistsInBranch[0]?.id ?? "", services[0]?.id ?? "")]);
+    setLines((prev) => [...prev, makeLine(nextKey(), therapistsInBranch[0]?.id ?? "", servicesInBranch[0]?.id ?? "")]);
   }
 
   function removeLine(key: string) {
     setLines((prev) => (prev.length > 1 ? prev.filter((line) => line.key !== key) : prev));
   }
 
-  const serviceById = useMemo(() => new Map(services.map((s) => [s.id, s])), [services]);
-  const totalPrice = lines.reduce((sum, l) => sum + (serviceById.get(l.serviceId)?.price ?? 0), 0);
-  const totalCommission = lines.reduce((sum, l) => sum + (serviceById.get(l.serviceId)?.commission_amount ?? 0), 0);
+  // Pasien istimewa: gratis untuk pasien, terapis juga tidak dapat fee.
+  const lineAmounts = (serviceId: string) => {
+    const p = priceOf(serviceId);
+    if (!p || isSpecial) return { price: 0, commission: 0 };
+    return { price: Number(p.price), commission: Number(p.commission_amount) };
+  };
+  const totalPrice = lines.reduce((sum, l) => sum + lineAmounts(l.serviceId).price, 0);
+  const totalCommission = lines.reduce((sum, l) => sum + lineAmounts(l.serviceId).commission, 0);
 
   function resetForm() {
     setPatientName("");
     setAge("");
     setComplaint("");
     setRecommendation("");
-    setLines([makeLine(nextKey(), therapistsInBranch[0]?.id ?? "", services[0]?.id ?? "")]);
+    setIsSpecial(false);
+    setLines([makeLine(nextKey(), therapistsInBranch[0]?.id ?? "", servicesInBranch[0]?.id ?? "")]);
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -97,7 +126,7 @@ export function VisitForm({
       setError("Pilih cabang terlebih dahulu.");
       return;
     }
-    if (lines.some((l) => !l.therapistId || !l.serviceId)) {
+    if (lines.some((l) => !l.therapistId || !l.serviceId || !priceOf(l.serviceId))) {
       setError("Setiap layanan harus punya terapis dan jenis layanan.");
       return;
     }
@@ -111,13 +140,14 @@ export function VisitForm({
         complaint,
         recommendation,
         visitDate: new Date().toISOString().slice(0, 10),
+        isSpecial,
         items: lines.map((l) => {
-          const service = serviceById.get(l.serviceId)!;
+          const amounts = lineAmounts(l.serviceId);
           return {
             therapistId: l.therapistId,
             serviceId: l.serviceId,
-            price: service.price,
-            commissionAmount: service.commission_amount,
+            price: amounts.price,
+            commissionAmount: amounts.commission,
             paymentMethod: l.paymentMethod,
             note: l.note,
           };
@@ -204,6 +234,21 @@ export function VisitForm({
             className="field-input"
           />
         </div>
+
+        <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-orange-100 bg-orange-50/40 px-3 py-2 text-sm sm:col-span-2 dark:border-zinc-800 dark:bg-zinc-950">
+          <input
+            type="checkbox"
+            checked={isSpecial}
+            onChange={(e) => setIsSpecial(e.target.checked)}
+            className="mt-0.5 h-4 w-4 accent-orange-600"
+          />
+          <span>
+            <span className="font-medium text-zinc-800 dark:text-zinc-200">Pasien Istimewa (gratis)</span>
+            <span className="block text-xs text-zinc-500">
+              Biaya terapi Rp0 dan terapis tidak mendapat fee untuk kunjungan ini.
+            </span>
+          </span>
+        </label>
       </div>
 
       <div className="flex flex-col gap-3">
@@ -215,7 +260,7 @@ export function VisitForm({
         </div>
 
         {lines.map((line, index) => {
-          const service = serviceById.get(line.serviceId);
+          const amounts = lineAmounts(line.serviceId);
           return (
             <div
               key={line.key}
@@ -244,9 +289,10 @@ export function VisitForm({
                   onChange={(e) => updateLine(line.key, { serviceId: e.target.value })}
                   className="field-input bg-white px-2 py-1.5 dark:bg-zinc-900"
                 >
-                  {services.map((s) => (
+                  {servicesInBranch.length === 0 && <option value="">Belum ada layanan di cabang ini</option>}
+                  {servicesInBranch.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.name} — Rp {s.price.toLocaleString("id-ID")}
+                      {s.name} — Rp {Number(priceOf(s.id)?.price ?? 0).toLocaleString("id-ID")}
                     </option>
                   ))}
                 </select>
@@ -271,9 +317,9 @@ export function VisitForm({
               </div>
 
               <div className="flex items-end justify-between gap-2 sm:flex-col sm:items-end">
-                {service && (
+                {line.serviceId && (
                   <span className="text-[11px] text-zinc-500">
-                    Komisi Rp {service.commission_amount.toLocaleString("id-ID")}
+                    Fee Rp {amounts.commission.toLocaleString("id-ID")}
                   </span>
                 )}
                 <button
@@ -291,7 +337,10 @@ export function VisitForm({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-lg bg-orange-50/60 px-3 py-2 text-xs text-zinc-600 dark:bg-orange-950/20 dark:text-zinc-400">
-        <span>Total harga: Rp {totalPrice.toLocaleString("id-ID")}</span>
+        <span>
+          Total harga: Rp {totalPrice.toLocaleString("id-ID")}
+          {isSpecial && <span className="badge badge-orange ml-2">Pasien Istimewa</span>}
+        </span>
         <span>Total komisi terapis: Rp {totalCommission.toLocaleString("id-ID")}</span>
       </div>
 

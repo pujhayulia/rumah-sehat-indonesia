@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { UserRole } from "@/types/database";
 
@@ -9,18 +10,20 @@ export interface CurrentProfile {
   branchName: string | null;
 }
 
-export async function getCurrentProfile(): Promise<CurrentProfile | null> {
+// cache(): layout & halaman di satu request berbagi hasil yang sama,
+// jadi profil cukup diambil sekali per pindah menu.
+export const getCurrentProfile = cache(async (): Promise<CurrentProfile | null> => {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims memverifikasi token login; lebih ringan dari getUser
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const userId = claimsData?.claims?.sub;
 
-  if (!user) return null;
+  if (!userId) return null;
 
   const { data } = await supabase
     .from("profiles")
     .select("id, full_name, role, branch_id, branches(name)")
-    .eq("id", user.id)
+    .eq("id", userId)
     .maybeSingle();
 
   if (!data) return null;
@@ -34,4 +37,4 @@ export async function getCurrentProfile(): Promise<CurrentProfile | null> {
     branchId: data.branch_id,
     branchName: branch?.name ?? null,
   };
-}
+});

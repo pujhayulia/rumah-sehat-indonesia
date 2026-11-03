@@ -51,7 +51,10 @@ export function VisitList({ visits, showBranch }: { visits: VisitRow[]; showBran
           {visits.map((v) => (
             <tr key={v.id} className="table-row">
               {showBranch && <td className="px-4 py-2 text-zinc-500">{v.branches?.name ?? "-"}</td>}
-              <td className="px-4 py-2">{v.patient_name}</td>
+              <td className="px-4 py-2">
+                {v.patient_name}
+                {v.is_special && <span className="badge badge-orange ml-2">Istimewa</span>}
+              </td>
               <td className="px-4 py-2">{v.age ?? "-"}</td>
               <td className="px-4 py-2">{v.therapists?.name ?? "-"}</td>
               <td className="px-4 py-2">

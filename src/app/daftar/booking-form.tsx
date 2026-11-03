@@ -1,14 +1,22 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import type { Branch, Service } from "@/types/database";
+import type { Branch, Service, ServicePrice } from "@/types/database";
 import { createBooking } from "./actions";
 
 function toDateInput(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
-export function BookingForm({ branches, services }: { branches: Branch[]; services: Service[] }) {
+export function BookingForm({
+  branches,
+  services,
+  prices,
+}: {
+  branches: Branch[];
+  services: Service[];
+  prices: ServicePrice[];
+}) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -21,6 +29,12 @@ export function BookingForm({ branches, services }: { branches: Branch[]; servic
   const [note, setNote] = useState("");
 
   const today = toDateInput(new Date());
+
+  // hanya tampilkan layanan yang tersedia di cabang terpilih, dengan harga cabang itu
+  const servicesInBranch = services.flatMap((service) => {
+    const p = prices.find((x) => x.service_id === service.id && x.branch_id === branchId);
+    return p ? [{ service, price: p.price }] : [];
+  });
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -67,7 +81,15 @@ export function BookingForm({ branches, services }: { branches: Branch[]; servic
     <form onSubmit={handleSubmit} className="card grid grid-cols-1 gap-3 p-4 sm:grid-cols-2">
       <div>
         <label className="field-label">Cabang</label>
-        <select required value={branchId} onChange={(e) => setBranchId(e.target.value)} className="field-input">
+        <select
+          required
+          value={branchId}
+          onChange={(e) => {
+            setBranchId(e.target.value);
+            setServiceId("");
+          }}
+          className="field-input"
+        >
           {branches.length === 0 && <option value="">Belum ada cabang</option>}
           {branches.map((b) => (
             <option key={b.id} value={b.id}>
@@ -110,9 +132,9 @@ export function BookingForm({ branches, services }: { branches: Branch[]; servic
         <label className="field-label">Layanan yang Diinginkan (opsional)</label>
         <select value={serviceId} onChange={(e) => setServiceId(e.target.value)} className="field-input">
           <option value="">Belum tahu / bebas</option>
-          {services.map((s) => (
+          {servicesInBranch.map(({ service: s, price }) => (
             <option key={s.id} value={s.id}>
-              {s.name} — Rp {s.price.toLocaleString("id-ID")}
+              {s.name} — Rp {Number(price).toLocaleString("id-ID")}
             </option>
           ))}
         </select>

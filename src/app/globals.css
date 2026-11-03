@@ -19,6 +19,25 @@
   }
 }
 
+/* Warna grafik keuangan (sudah dicek aman untuk buta warna, terang & gelap) */
+.viz-root {
+  --viz-income: #2a78d6;
+  --viz-expense: #eb6834;
+  --viz-grid: #ececea;
+  --viz-axis: #8a8984;
+  --viz-surface: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  .viz-root {
+    --viz-income: #3987e5;
+    --viz-expense: #d95926;
+    --viz-grid: #2a2a2e;
+    --viz-axis: #8a8a93;
+    --viz-surface: #18181b;
+  }
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

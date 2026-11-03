@@ -3,6 +3,9 @@ import { getCurrentProfile } from "@/lib/supabase/profile";
 import { resolveBranchSelection } from "@/lib/branch";
 import { formatRupiah, formatDate } from "@/lib/format";
 import type { DailySummary, Visit } from "@/types/database";
+import { FinanceChart, type FinancePoint } from "./finance-chart";
+
+const CHART_DAYS = 90;
 
 function StatCard({
   label,
@@ -52,7 +55,16 @@ export default async function DashboardPage({
   const supabase = await createClient();
   const today = new Date().toISOString().slice(0, 10);
 
+  const chartStart = new Date(`${today}T00:00:00Z`);
+  chartStart.setUTCDate(chartStart.getUTCDate() - (CHART_DAYS - 1));
+  const chartFrom = chartStart.toISOString().slice(0, 10);
+
   let summaryQuery = supabase.from("daily_summary").select("*").eq("transaction_date", today);
+  let chartQuery = supabase
+    .from("daily_summary")
+    .select("transaction_date, total_qris, total_cash_masuk, total_pengeluaran")
+    .gte("transaction_date", chartFrom)
+    .lte("transaction_date", today);
   let visitsQuery = supabase
     .from("visits")
     .select("*, therapists(name), services(name), branches(name)")
@@ -61,10 +73,34 @@ export default async function DashboardPage({
 
   if (selection.branchId) {
     summaryQuery = summaryQuery.eq("branch_id", selection.branchId);
+    chartQuery = chartQuery.eq("branch_id", selection.branchId);
     visitsQuery = visitsQuery.eq("branch_id", selection.branchId);
   }
 
-  const [{ data: summaryRows }, { data: visits }] = await Promise.all([summaryQuery, visitsQuery]);
+  const [{ data: summaryRows }, { data: visits }, { data: chartRows }] = await Promise.all([
+    summaryQuery,
+    visitsQuery,
+    chartQuery,
+  ]);
+
+  // Satu titik per hari (semua cabang dijumlah), hari tanpa transaksi = 0
+  const byDate = new Map<string, FinancePoint>();
+  for (let i = 0; i < CHART_DAYS; i++) {
+    const d = new Date(chartStart);
+    d.setUTCDate(chartStart.getUTCDate() + i);
+    const key = d.toISOString().slice(0, 10);
+    byDate.set(key, { date: key, income: 0, expense: 0 });
+  }
+  for (const r of (chartRows ?? []) as Pick<
+    DailySummary,
+    "transaction_date" | "total_qris" | "total_cash_masuk" | "total_pengeluaran"
+  >[]) {
+    const point = byDate.get(r.transaction_date);
+    if (!point) continue;
+    point.income += Number(r.total_qris) + Number(r.total_cash_masuk);
+    point.expense += Number(r.total_pengeluaran);
+  }
+  const chartData = Array.from(byDate.values());
 
   const rows = (summaryRows ?? []) as DailySummary[];
   const jumlahPasien = rows.reduce((sum, r) => sum + Number(r.jumlah_pasien), 0);
@@ -72,6 +108,8 @@ export default async function DashboardPage({
   const totalCash = rows.reduce((sum, r) => sum + Number(r.total_cash_masuk), 0);
   const totalPengeluaran = rows.reduce((sum, r) => sum + Number(r.total_pengeluaran), 0);
   const saldo = totalQris + totalCash - totalPengeluaran;
+  const jumlahIstimewa = rows.reduce((sum, r) => sum + Number(r.jumlah_pasien_istimewa), 0);
+  const noPatientRows = rows.filter((r) => r.tidak_ada_pasien);
 
   return (
     <div className="flex flex-col gap-6">
@@ -87,6 +125,20 @@ export default async function DashboardPage({
         <StatCard label="Pengeluaran" value={formatRupiah(totalPengeluaran)} tone="negative" />
         <StatCard label="Saldo" value={formatRupiah(saldo)} tone="positive" />
       </div>
+
+      {(jumlahIstimewa > 0 || noPatientRows.length > 0) && (
+        <div className="flex flex-wrap gap-2 text-xs">
+          {jumlahIstimewa > 0 && <span className="badge badge-orange">{jumlahIstimewa} pasien istimewa hari ini</span>}
+          {noPatientRows.map((r) => (
+            <span key={r.branch_id} className="badge badge-muted">
+              {r.branch_name}: tidak ada pasien
+              {r.catatan_tidak_ada_pasien ? ` (${r.catatan_tidak_ada_pasien})` : ""}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <FinanceChart data={chartData} />
 
       {selection.isAll && rows.length > 0 && (
         <div className="table-wrap">
@@ -144,7 +196,10 @@ export default async function DashboardPage({
               {(visits as VisitRow[] | null)?.map((v) => (
                 <tr key={v.id} className="table-row">
                   {selection.isAll && <td className="px-4 py-2 text-zinc-500">{v.branches?.name ?? "-"}</td>}
-                  <td className="px-4 py-2">{v.patient_name}</td>
+                  <td className="px-4 py-2">
+                    {v.patient_name}
+                    {v.is_special && <span className="badge badge-orange ml-2">Istimewa</span>}
+                  </td>
                   <td className="px-4 py-2">{v.therapists?.name ?? "-"}</td>
                   <td className="px-4 py-2">{v.services?.name ?? "-"}</td>
                   <td className="px-4 py-2">

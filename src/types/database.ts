@@ -36,9 +36,25 @@ export interface Service {
   name: string;
   description: string | null;
   duration_minutes: number | null;
+  active: boolean;
+  created_at: string;
+}
+
+// Harga & fee terapis sebuah layanan di satu cabang.
+// Tidak ada baris = layanan tidak tersedia di cabang itu.
+export interface ServicePrice {
+  service_id: string;
+  branch_id: string;
   price: number;
   commission_amount: number;
-  active: boolean;
+}
+
+export interface NoPatientDay {
+  id: string;
+  branch_id: string;
+  day: string;
+  note: string | null;
+  created_by: string | null;
   created_at: string;
 }
 
@@ -65,6 +81,7 @@ export interface Visit {
   price: number;
   commission_amount: number;
   payment_method: PaymentMethod;
+  is_special: boolean;
   created_by: string | null;
   created_at: string;
 }
@@ -103,8 +120,11 @@ export interface DailySummary {
   branch_id: string;
   branch_name: string;
   jumlah_pasien: number;
+  jumlah_pasien_istimewa: number;
   total_qris: number;
   total_cash_masuk: number;
   total_pengeluaran: number;
   saldo: number;
+  tidak_ada_pasien: boolean;
+  catatan_tidak_ada_pasien: string | null;
 }

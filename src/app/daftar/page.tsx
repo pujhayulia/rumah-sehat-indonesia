@@ -4,9 +4,10 @@ import { BookingForm } from "./booking-form";
 
 export default async function DaftarPage() {
   const supabase = await createClient();
-  const [{ data: branches }, { data: services }] = await Promise.all([
+  const [{ data: branches }, { data: services }, { data: prices }] = await Promise.all([
     supabase.from("branches").select("*").order("name"),
     supabase.from("services").select("*").eq("active", true).order("name"),
+    supabase.from("service_prices").select("*"),
   ]);
 
   return (
@@ -31,7 +32,7 @@ export default async function DaftarPage() {
           </p>
         </div>
 
-        <BookingForm branches={branches ?? []} services={services ?? []} />
+        <BookingForm branches={branches ?? []} services={services ?? []} prices={prices ?? []} />
       </div>
     </div>
   );

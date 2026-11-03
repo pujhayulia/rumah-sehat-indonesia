@@ -50,6 +50,7 @@ export default async function LaporanPage({
 
   const rows = (summaryRows ?? []) as DailySummary[];
   const totalPasien = rows.reduce((sum, r) => sum + Number(r.jumlah_pasien), 0);
+  const totalIstimewa = rows.reduce((sum, r) => sum + Number(r.jumlah_pasien_istimewa), 0);
   const totalQris = rows.reduce((sum, r) => sum + Number(r.total_qris), 0);
   const totalCash = rows.reduce((sum, r) => sum + Number(r.total_cash_masuk), 0);
   const totalPengeluaran = rows.reduce((sum, r) => sum + Number(r.total_pengeluaran), 0);
@@ -98,6 +99,7 @@ export default async function LaporanPage({
         <div className="stat-tile">
           <p className="text-xs uppercase text-zinc-500">Jumlah Pasien</p>
           <p className="mt-1 text-lg font-semibold text-orange-600 dark:text-orange-400">{totalPasien}</p>
+          {totalIstimewa > 0 && <p className="text-xs text-zinc-500">{totalIstimewa} pasien istimewa</p>}
         </div>
         <div className="stat-tile">
           <p className="text-xs uppercase text-zinc-500">Qris</p>
@@ -169,9 +171,21 @@ export default async function LaporanPage({
             )}
             {rows.map((r) => (
               <tr key={`${r.transaction_date}-${r.branch_id}`} className="table-row">
-                <td className="px-4 py-2">{r.transaction_date}</td>
+                <td className="px-4 py-2">
+                  {r.transaction_date}
+                  {r.tidak_ada_pasien && (
+                    <span className="block text-xs text-amber-700 dark:text-amber-400">
+                      Tidak ada pasien{r.catatan_tidak_ada_pasien ? ` — ${r.catatan_tidak_ada_pasien}` : ""}
+                    </span>
+                  )}
+                </td>
                 {selection.isAll && <td className="px-4 py-2 text-zinc-500">{r.branch_name}</td>}
-                <td className="px-4 py-2 text-right">{r.jumlah_pasien}</td>
+                <td className="px-4 py-2 text-right">
+                  {r.jumlah_pasien}
+                  {Number(r.jumlah_pasien_istimewa) > 0 && (
+                    <span className="block text-xs text-zinc-500">{r.jumlah_pasien_istimewa} istimewa</span>
+                  )}
+                </td>
                 <td className="px-4 py-2 text-right">{formatRupiah(r.total_qris)}</td>
                 <td className="px-4 py-2 text-right">{formatRupiah(r.total_cash_masuk)}</td>
                 <td className="px-4 py-2 text-right text-rose-600">{formatRupiah(r.total_pengeluaran)}</td>

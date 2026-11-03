@@ -2,15 +2,24 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { Branch } from "@/types/database";
-import { createTherapist } from "./actions";
+import type { Branch, Therapist } from "@/types/database";
+import { createTherapist, updateTherapist } from "./actions";
 
-export function TherapistForm({ branches }: { branches: Branch[] }) {
+// Dipakai untuk tambah terapis baru, dan untuk edit kalau `therapist` diisi.
+export function TherapistForm({
+  branches,
+  therapist,
+  onDone,
+}: {
+  branches: Branch[];
+  therapist?: Therapist;
+  onDone?: () => void;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [branchId, setBranchId] = useState(branches[0]?.id ?? "");
+  const [name, setName] = useState(therapist?.name ?? "");
+  const [phone, setPhone] = useState(therapist?.phone ?? "");
+  const [branchId, setBranchId] = useState(therapist?.branch_id ?? branches[0]?.id ?? "");
   const [error, setError] = useState<string | null>(null);
 
   function handleSubmit(e: React.FormEvent) {
@@ -19,19 +28,26 @@ export function TherapistForm({ branches }: { branches: Branch[] }) {
     setError(null);
 
     startTransition(async () => {
-      const result = await createTherapist({ name, phone, branchId });
+      const input = { name: name.trim(), phone, branchId };
+      const result = therapist ? await updateTherapist(therapist.id, input) : await createTherapist(input);
       if (result.error) {
         setError(result.error);
         return;
       }
-      setName("");
-      setPhone("");
+      if (!therapist) {
+        setName("");
+        setPhone("");
+      }
       router.refresh();
+      onDone?.();
     });
   }
 
   return (
-    <form onSubmit={handleSubmit} className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-end">
+    <form
+      onSubmit={handleSubmit}
+      className={`flex flex-col gap-3 sm:flex-row sm:items-end ${therapist ? "" : "card p-4"}`}
+    >
       <div className="flex-1">
         <label className="field-label">Nama Terapis</label>
         <input required value={name} onChange={(e) => setName(e.target.value)} className="field-input" />
@@ -56,8 +72,13 @@ export function TherapistForm({ branches }: { branches: Branch[] }) {
         </p>
       )}
       <button type="submit" disabled={isPending} className="btn-primary">
-        {isPending ? "Menyimpan..." : "Tambah Terapis"}
+        {isPending ? "Menyimpan..." : therapist ? "Simpan" : "Tambah Terapis"}
       </button>
+      {therapist && (
+        <button type="button" onClick={onDone} disabled={isPending} className="btn-secondary">
+          Batal
+        </button>
+      )}
     </form>
   );
 }

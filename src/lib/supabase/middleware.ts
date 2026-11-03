@@ -23,9 +23,9 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims tetap memverifikasi & me-refresh sesi, tapi lebih ringan dari getUser
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const user = claimsData?.claims?.sub ?? null;
 
   const isLoginPage = request.nextUrl.pathname.startsWith("/login");
   const isPublicPage =

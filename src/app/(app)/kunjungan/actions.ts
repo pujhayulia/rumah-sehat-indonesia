@@ -19,6 +19,7 @@ export interface CreateVisitsInput {
   complaint: string;
   recommendation: string;
   visitDate: string;
+  isSpecial: boolean;
   items: VisitItemInput[];
   bookingId?: string;
 }
@@ -42,8 +43,10 @@ export async function createVisits(input: CreateVisitsInput) {
     recommendation: input.recommendation || null,
     therapist_id: item.therapistId,
     service_id: item.serviceId,
-    price: item.price,
-    commission_amount: item.commissionAmount,
+    // pasien istimewa selalu Rp0, apa pun yang dikirim form
+    price: input.isSpecial ? 0 : item.price,
+    commission_amount: input.isSpecial ? 0 : item.commissionAmount,
+    is_special: input.isSpecial,
     payment_method: item.paymentMethod,
     note: item.note || null,
     created_by: user?.id ?? null,
@@ -54,6 +57,9 @@ export async function createVisits(input: CreateVisitsInput) {
   if (error) {
     return { error: error.message };
   }
+
+  // Ada pasien -> tanda "tidak ada pasien" hari itu tidak berlaku lagi
+  await supabase.from("no_patient_days").delete().eq("branch_id", input.branchId).eq("day", input.visitDate);
 
   if (input.bookingId) {
     // Booking otomatis ditandai selesai — kalau ini gagal, kunjungannya tetap tersimpan,
@@ -77,5 +83,48 @@ export async function deleteVisit(id: string) {
 
   revalidatePath("/kunjungan");
   revalidatePath("/dashboard");
+  return { error: null };
+}
+
+export async function markNoPatientDay(input: { branchId: string; day: string; note: string }) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { count } = await supabase
+    .from("visits")
+    .select("id", { count: "exact", head: true })
+    .eq("branch_id", input.branchId)
+    .eq("visit_date", input.day);
+  if (count && count > 0) {
+    return { error: "Sudah ada kunjungan hari ini, jadi tidak bisa ditandai tanpa pasien." };
+  }
+
+  const { error } = await supabase.from("no_patient_days").upsert(
+    {
+      branch_id: input.branchId,
+      day: input.day,
+      note: input.note.trim() || null,
+      created_by: user?.id ?? null,
+    },
+    { onConflict: "branch_id,day" }
+  );
+
+  if (error) return { error: error.message };
+  revalidatePath("/kunjungan");
+  revalidatePath("/dashboard");
+  revalidatePath("/laporan");
+  return { error: null };
+}
+
+export async function unmarkNoPatientDay(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("no_patient_days").delete().eq("id", id);
+
+  if (error) return { error: error.message };
+  revalidatePath("/kunjungan");
+  revalidatePath("/dashboard");
+  revalidatePath("/laporan");
   return { error: null };
 }
