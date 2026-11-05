@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { Branch, Service, ServicePrice, Therapist } from "@/types/database";
 import { createVisits } from "./actions";
 
@@ -27,6 +27,8 @@ export function VisitForm({
   initialPatientName,
   initialServiceId,
   bookingId,
+  visitDate,
+  maxDate,
 }: {
   branches: Branch[];
   lockedBranch: { id: string; name: string } | null;
@@ -37,8 +39,12 @@ export function VisitForm({
   initialPatientName?: string;
   initialServiceId?: string;
   bookingId?: string;
+  visitDate: string;
+  maxDate: string;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const keyCounter = useRef(0);
@@ -111,6 +117,16 @@ export function VisitForm({
   const totalPrice = lines.reduce((sum, l) => sum + lineAmounts(l.serviceId).price, 0);
   const totalCommission = lines.reduce((sum, l) => sum + lineAmounts(l.serviceId).commission, 0);
 
+  // Tanggal disimpan di URL, jadi daftar kunjungan di bawah ikut menampilkan tanggal itu
+  function handleDateChange(value: string) {
+    if (!value || value > maxDate) return;
+    const next = new URLSearchParams(searchParams.toString());
+    if (value === maxDate) next.delete("date");
+    else next.set("date", value);
+    const query = next.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
+
   function resetForm() {
     setPatientName("");
     setAge("");
@@ -139,7 +155,7 @@ export function VisitForm({
         age: age ? Number(age) : null,
         complaint,
         recommendation,
-        visitDate: new Date().toISOString().slice(0, 10),
+        visitDate,
         isSpecial,
         items: lines.map((l) => {
           const amounts = lineAmounts(l.serviceId);
@@ -183,7 +199,7 @@ export function VisitForm({
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="sm:col-span-2">
+        <div>
           <label className="field-label">Cabang</label>
           {lockedBranch ? (
             <div className="rounded-lg border border-orange-100 bg-orange-50/60 px-3 py-2 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">
@@ -197,6 +213,26 @@ export function VisitForm({
                 </option>
               ))}
             </select>
+          )}
+        </div>
+
+        <div>
+          <label className="field-label">Tanggal Kunjungan</label>
+          <input
+            type="date"
+            required
+            max={maxDate}
+            value={visitDate}
+            onChange={(e) => handleDateChange(e.target.value)}
+            className="field-input"
+          />
+          {visitDate !== maxDate && (
+            <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+              Menginput data untuk tanggal yang sudah lewat.{" "}
+              <button type="button" onClick={() => handleDateChange(maxDate)} className="font-medium underline">
+                Kembali ke hari ini
+              </button>
+            </p>
           )}
         </div>
 

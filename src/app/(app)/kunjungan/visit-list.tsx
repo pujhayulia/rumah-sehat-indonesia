@@ -12,7 +12,15 @@ export type VisitRow = Visit & {
   branches: { name: string } | null;
 };
 
-export function VisitList({ visits, showBranch }: { visits: VisitRow[]; showBranch: boolean }) {
+export function VisitList({
+  visits,
+  showBranch,
+  emptyText = "Belum ada kunjungan hari ini.",
+}: {
+  visits: VisitRow[];
+  showBranch: boolean;
+  emptyText?: string;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -44,7 +52,7 @@ export function VisitList({ visits, showBranch }: { visits: VisitRow[]; showBran
           {visits.length === 0 && (
             <tr>
               <td colSpan={showBranch ? 9 : 8} className="px-4 py-6 text-center text-zinc-400">
-                Belum ada kunjungan hari ini.
+                {emptyText}
               </td>
             </tr>
           )}

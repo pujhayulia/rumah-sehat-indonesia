@@ -46,3 +46,6 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# panduan yang berisi password login — jangan pernah commit
+*-dengan-login.pdf

@@ -11,11 +11,13 @@ export function NoPatientCard({
   branchId,
   branchName,
   day,
+  isToday,
   existing,
 }: {
   branchId: string;
   branchName: string;
   day: string;
+  isToday: boolean;
   existing: NoPatientDay | null;
 }) {
   const router = useRouter();
@@ -53,7 +55,7 @@ export function NoPatientCard({
       <div className="card flex flex-wrap items-center justify-between gap-3 border-amber-200 bg-amber-50/60 p-4 dark:border-amber-900/50 dark:bg-amber-950/20">
         <div>
           <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-            Hari ini ditandai: tidak ada pasien ({branchName})
+            {isToday ? "Hari ini" : "Tanggal ini"} ditandai: tidak ada pasien ({branchName})
           </p>
           <p className="text-xs text-amber-700/80 dark:text-amber-400/80">
             {existing.note ? `Catatan: ${existing.note}` : "Tanpa catatan."} Tanda ini otomatis hilang kalau ada
@@ -71,9 +73,9 @@ export function NoPatientCard({
   if (!open) {
     return (
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-dashed border-orange-200 px-4 py-3 text-sm text-zinc-500 dark:border-zinc-800">
-        <span>Belum ada pasien di {branchName} hari ini?</span>
+        <span>Belum ada pasien di {branchName} {isToday ? "hari ini" : "pada tanggal ini"}?</span>
         <button onClick={() => setOpen(true)} className="btn-secondary shrink-0 px-3 py-1.5 text-xs">
-          Tandai: tidak ada pasien hari ini
+          Tandai: tidak ada pasien {isToday ? "hari ini" : "tanggal ini"}
         </button>
       </div>
     );
@@ -82,8 +84,10 @@ export function NoPatientCard({
   return (
     <form onSubmit={handleMark} className="card flex flex-col gap-3 p-4">
       <div>
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Tidak ada pasien hari ini</h2>
-        <p className="text-xs text-zinc-500">Hari ini tetap tercatat di laporan {branchName} dengan 0 pasien.</p>
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+          Tidak ada pasien {isToday ? "hari ini" : "tanggal ini"}
+        </h2>
+        <p className="text-xs text-zinc-500">Tanggal ini tetap tercatat di laporan {branchName} dengan 0 pasien.</p>
       </div>
       <div>
         <label className="field-label">Catatan (opsional)</label>

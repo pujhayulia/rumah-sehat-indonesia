@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/supabase/profile";
 import { resolveBranchSelection } from "@/lib/branch";
+import { formatDate } from "@/lib/format";
 import type { NoPatientDay } from "@/types/database";
 import { VisitForm } from "./visit-form";
 import { VisitList, type VisitRow } from "./visit-list";
@@ -9,7 +10,7 @@ import { NoPatientCard } from "./no-patient-card";
 export default async function KunjunganPage({
   searchParams,
 }: {
-  searchParams: Promise<{ branch?: string; name?: string; serviceId?: string; bookingId?: string }>;
+  searchParams: Promise<{ branch?: string; name?: string; serviceId?: string; bookingId?: string; date?: string }>;
 }) {
   const profile = await getCurrentProfile();
   if (!profile) return null;
@@ -18,14 +19,18 @@ export default async function KunjunganPage({
   const selection = resolveBranchSelection(profile, params);
   const supabase = await createClient();
   const today = new Date().toISOString().slice(0, 10);
+  // Tanggal yang sedang diinput/dilihat; bisa mundur untuk input data hari sebelumnya
+  const visitDate =
+    params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) && params.date <= today ? params.date : today;
+  const isToday = visitDate === today;
 
   let visitsQuery = supabase
     .from("visits")
     .select("*, therapists(name), services(name), branches(name)")
-    .eq("visit_date", today)
+    .eq("visit_date", visitDate)
     .order("created_at", { ascending: false });
 
-  let noPatientQuery = supabase.from("no_patient_days").select("*").eq("day", today);
+  let noPatientQuery = supabase.from("no_patient_days").select("*").eq("day", visitDate);
 
   if (selection.branchId) {
     visitsQuery = visitsQuery.eq("branch_id", selection.branchId);
@@ -63,14 +68,16 @@ export default async function KunjunganPage({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Kunjungan Hari Ini</h1>
+        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+          {isToday ? "Kunjungan Hari Ini" : `Kunjungan ${formatDate(visitDate)}`}
+        </h1>
         <p className="text-sm text-zinc-500">
           Input pasien yang datang — pemasukan & komisi terapis otomatis tercatat di Kas.
         </p>
       </div>
 
       {showNoPatientCard && markBranchId && (
-        <NoPatientCard branchId={markBranchId} branchName={markBranchName} day={today} existing={existingMark} />
+        <NoPatientCard branchId={markBranchId} branchName={markBranchName} day={visitDate} isToday={isToday} existing={existingMark} />
       )}
 
       <VisitForm
@@ -83,8 +90,14 @@ export default async function KunjunganPage({
         initialPatientName={params.name}
         initialServiceId={params.serviceId}
         bookingId={params.bookingId}
+        visitDate={visitDate}
+        maxDate={today}
       />
-      <VisitList visits={(visits ?? []) as VisitRow[]} showBranch={selection.isAll} />
+      <VisitList
+        visits={(visits ?? []) as VisitRow[]}
+        showBranch={selection.isAll}
+        emptyText={isToday ? "Belum ada kunjungan hari ini." : "Belum ada kunjungan pada tanggal ini."}
+      />
     </div>
   );
 }
