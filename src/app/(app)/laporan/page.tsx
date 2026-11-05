@@ -1,12 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/supabase/profile";
 import { resolveBranchSelection } from "@/lib/branch";
 import { formatRupiah } from "@/lib/format";
-import type { DailySummary } from "@/types/database";
-
-function toDateInput(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
+import { getReportData, resolveRange } from "./report-data";
 
 export default async function LaporanPage({
   searchParams,
@@ -18,61 +13,25 @@ export default async function LaporanPage({
 
   const params = await searchParams;
   const selection = resolveBranchSelection(profile, params);
+  const { from, to } = resolveRange(params);
+  const data = await getReportData(selection, { from, to });
 
-  const today = new Date();
-  const weekAgo = new Date(today);
-  weekAgo.setDate(today.getDate() - 6);
+  const rows = data.rows;
+  const totalPasien = data.totals.pasien;
+  const totalIstimewa = data.totals.istimewa;
+  const totalQris = data.totals.qris;
+  const totalCash = data.totals.cash;
+  const totalPengeluaran = data.totals.pengeluaran;
+  const totalSaldo = data.totals.saldo;
+  const perBranch = new Map(data.perBranch.map((b) => [b.name, { pasien: b.pasien, saldo: b.saldo }]));
+  const commissionByTherapist = new Map(data.commissionByTherapist.map((c) => [c.name, c.total]));
 
-  const from = params.from || toDateInput(weekAgo);
-  const to = params.to || toDateInput(today);
-
-  const supabase = await createClient();
-
-  let summaryQuery = supabase
-    .from("daily_summary")
-    .select("*")
-    .gte("transaction_date", from)
-    .lte("transaction_date", to)
-    .order("transaction_date", { ascending: false });
-
-  let commissionQuery = supabase
-    .from("visits")
-    .select("commission_amount, therapists(name)")
-    .gte("visit_date", from)
-    .lte("visit_date", to);
-
-  if (selection.branchId) {
-    summaryQuery = summaryQuery.eq("branch_id", selection.branchId);
-    commissionQuery = commissionQuery.eq("branch_id", selection.branchId);
-  }
-
-  const [{ data: summaryRows }, { data: commissionRows }] = await Promise.all([summaryQuery, commissionQuery]);
-
-  const rows = (summaryRows ?? []) as DailySummary[];
-  const totalPasien = rows.reduce((sum, r) => sum + Number(r.jumlah_pasien), 0);
-  const totalIstimewa = rows.reduce((sum, r) => sum + Number(r.jumlah_pasien_istimewa), 0);
-  const totalQris = rows.reduce((sum, r) => sum + Number(r.total_qris), 0);
-  const totalCash = rows.reduce((sum, r) => sum + Number(r.total_cash_masuk), 0);
-  const totalPengeluaran = rows.reduce((sum, r) => sum + Number(r.total_pengeluaran), 0);
-  const totalSaldo = totalQris + totalCash - totalPengeluaran;
-
-  const perBranch = new Map<string, { pasien: number; saldo: number }>();
-  for (const r of rows) {
-    const existing = perBranch.get(r.branch_name) ?? { pasien: 0, saldo: 0 };
-    existing.pasien += Number(r.jumlah_pasien);
-    existing.saldo += Number(r.saldo);
-    perBranch.set(r.branch_name, existing);
-  }
-
-  const commissionByTherapist = new Map<string, number>();
-  for (const row of (commissionRows ?? []) as unknown as {
-    commission_amount: number;
-    therapists: { name: string } | { name: string }[] | null;
-  }[]) {
-    const therapist = Array.isArray(row.therapists) ? row.therapists[0] : row.therapists;
-    const name = therapist?.name ?? "Tanpa nama";
-    commissionByTherapist.set(name, (commissionByTherapist.get(name) ?? 0) + Number(row.commission_amount));
-  }
+  // Link download memakai filter yang sama dengan yang sedang tampil
+  const exportQuery = (format: "pdf" | "xlsx") => {
+    const q = new URLSearchParams({ format, from, to });
+    if (selection.branchId) q.set("branch", selection.branchId);
+    return `/laporan/export?${q.toString()}`;
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -90,10 +49,23 @@ export default async function LaporanPage({
           <label className="field-label">Sampai</label>
           <input type="date" name="to" defaultValue={to} className="field-input" />
         </div>
+        {params.branch && <input type="hidden" name="branch" value={params.branch} />}
         <button type="submit" className="btn-primary">
           Tampilkan
         </button>
+        <div className="flex flex-wrap gap-2 sm:ml-auto">
+          <a href={exportQuery("pdf")} className="btn-secondary" download>
+            Download PDF
+          </a>
+          <a href={exportQuery("xlsx")} className="btn-secondary" download>
+            Download Excel
+          </a>
+        </div>
       </form>
+      <p className="-mt-3 text-xs text-zinc-500">
+        File berisi laporan {data.branchLabel} untuk rentang tanggal di atas. Klik &ldquo;Tampilkan&rdquo; dulu kalau
+        tanggalnya baru diubah.
+      </p>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <div className="stat-tile">
